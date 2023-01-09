@@ -1,0 +1,12 @@
+.DS_Store
+node_modules/
+# testing
+.nyc_output/
+# distribution
+.deploy/
+src/**/*.js
+test/**/*.js
+src/**/*.d.ts
+test/**/*.d.ts
+*.map
+*.tgz

@@ -1,6 +1,8 @@
 import {Reporter} from '@parcel/plugin';
 import {resolve} from 'path';
-import {readFile, readJSON, outputFile, remove} from 'fs-extra';
+import {execSync} from 'child_process';
+import {gray, cyan, red, bold, magenta, green} from 'chalk';
+import {readFile, readJSON, outputFile, stat} from 'fs-extra';
 import {
   transpileModule,
   ScriptTarget,
@@ -8,22 +10,20 @@ import {
   ModuleResolutionKind,
 } from 'typescript';
 import {getManifest, GetManifestOptions} from 'workbox-build';
-import {rollup} from 'rollup';
-import {nodeResolve} from '@rollup/plugin-node-resolve';
-import {minify} from 'terser';
 
 interface TiniConfig {
   out?: string;
-  pwa?: ConfigPWA;
+  pwa?: PWAConfig;
 }
 
-interface ConfigPWA {
+interface PWAConfig {
   globPatterns?: string[];
 }
 
 export default new Reporter({
   async report({event}) {
     if (event.type === 'buildSuccess') {
+      const startTime = new Date().getTime();
       // load config
       const {out: outDir = 'www', pwa: pwaPrecaching} = await loadTiniConfig();
       // read sw.ts
@@ -43,14 +43,30 @@ precacheAndRoute(${JSON.stringify(manifestEntries)});
         \n` + code;
       }
       // save file
-      const rawPath = resolve(outDir, 'sw-raw.js');
-      await saveRawSW(rawPath, code);
+      const swPath = resolve(outDir, 'sw.js');
+      await saveSWDotJS(swPath, code);
       // bundle
       try {
-        await bundle(outDir);
-        await remove(rawPath);
+        execSync(
+          'parcel build www/sw.js --dist-dir www --config "@parcel/config-default" --log-level error',
+          {cwd: '.', stdio: 'inherit'}
+        );
+        if (process.env.NODE_ENV !== 'development') {
+          const fileStat = await stat(swPath);
+          const endTime = new Date().getTime();
+          const timeSecs = ((endTime - startTime) / 1000).toFixed(2);
+          process.stdout.write(
+            `${gray(outDir + '/')}${bold(
+              cyan('sw.js')
+            )}                               ${bold(
+              magenta((fileStat.size / 1024).toFixed(2) + ' KB')
+            )}    ${bold(green(timeSecs + 's'))}\n`
+          );
+        }
       } catch (error: any) {
-        process.stdout.write(`${error.message}\n`);
+        process.stdout.write(
+          `${red('Failed to build sw.js, please try again!')}\n`
+        );
       }
     }
   },
@@ -82,28 +98,6 @@ function buildPrecaching(options: GetManifestOptions) {
   return getManifest(options);
 }
 
-function saveRawSW(rawPath: string, content: string) {
+function saveSWDotJS(rawPath: string, content: string) {
   return outputFile(rawPath, content);
-}
-
-async function bundle(outDir: string) {
-  const bundle = await rollup({
-    input: `${outDir}/sw-raw.js`,
-    plugins: [nodeResolve()],
-  });
-  const {output} = await bundle.generate({
-    format: 'iife',
-    sourcemap: false,
-  });
-  const {code: minCode, map: minMap} = await minify(output[0]?.code, {
-    sourceMap: true,
-  });
-  if (!minCode || !minMap) {
-    throw new Error('Build sw.js failed, please try again!');
-  }
-  await outputFile(
-    resolve(`${outDir}/sw.js`),
-    minCode + '\n//# sourceMappingURL=sw.js.map'
-  );
-  await outputFile(resolve(`${outDir}/sw.js.map`), minMap.toString());
 }

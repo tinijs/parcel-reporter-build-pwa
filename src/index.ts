@@ -9,7 +9,7 @@ import {
   ModuleKind,
   ModuleResolutionKind,
 } from 'typescript';
-import {getManifest, GetManifestOptions} from 'workbox-build';
+import {getManifest} from 'workbox-build';
 
 interface TiniConfig {
   out?: string;
@@ -20,19 +20,37 @@ interface PWAConfig {
   globPatterns?: string[];
 }
 
+const CONFIG_PATH = 'tini.config.json';
+const DEFAULT_OUR_DIR = 'www';
+const APP_DIR = 'app';
+const SW_TS = 'sw.ts';
+const SW_JS = 'sw.js';
+
 export default new Reporter({
   async report({event}) {
     if (event.type === 'buildSuccess') {
       const startTime = new Date().getTime();
       // load config
-      const {out: outDir = 'www', pwa: pwaPrecaching} = await loadTiniConfig();
+      const {out, pwa: pwaPrecaching} = (await readJSON(
+        resolve(CONFIG_PATH)
+      )) as TiniConfig;
+      const outDir = out || DEFAULT_OUR_DIR;
       // read sw.ts
-      const tsCode = await readSWDotTS();
+      const tsCode = (await readFile(resolve(APP_DIR, SW_TS))).toString('utf8');
       // transpile
-      let {outputText: code} = transpile(tsCode);
+      let {outputText: code} = transpileModule(tsCode, {
+        compilerOptions: {
+          noEmit: false,
+          sourceMap: false,
+          skipLibCheck: true,
+          moduleResolution: ModuleResolutionKind.NodeJs,
+          module: ModuleKind.ESNext,
+          target: ScriptTarget.ESNext,
+        },
+      });
       // inject precaching entries
       if (pwaPrecaching?.globPatterns) {
-        const {manifestEntries} = await buildPrecaching({
+        const {manifestEntries} = await getManifest({
           globDirectory: outDir,
           ...(pwaPrecaching || {}),
         });
@@ -43,61 +61,29 @@ precacheAndRoute(${JSON.stringify(manifestEntries)});
         \n` + code;
       }
       // save file
-      const swPath = resolve(outDir, 'sw.js');
-      await saveSWDotJS(swPath, code);
+      const swPath = resolve(outDir, SW_JS);
+      await outputFile(swPath, code);
       // bundle
       try {
         execSync(
-          'parcel build www/sw.js --dist-dir www --config "@parcel/config-default" --log-level error',
+          `parcel build ${outDir}/sw.js --dist-dir ${outDir} --config "@parcel/config-default" --log-level error`,
           {cwd: '.', stdio: 'inherit'}
         );
         if (process.env.NODE_ENV !== 'development') {
-          const fileStat = await stat(swPath);
           const endTime = new Date().getTime();
           const timeSecs = ((endTime - startTime) / 1000).toFixed(2);
+          const fileStat = await stat(swPath);
           process.stdout.write(
-            `${gray(outDir + '/')}${bold(
-              cyan('sw.js')
-            )}                               ${bold(
+            `${gray(outDir + '/')}${bold(cyan(SW_JS))}          ${bold(
               magenta((fileStat.size / 1024).toFixed(2) + ' KB')
             )}    ${bold(green(timeSecs + 's'))}\n`
           );
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         process.stdout.write(
-          `${red('Failed to build sw.js, please try again!')}\n`
+          red(`Failed to build ${outDir}/${SW_JS}, please try again!`) + '\n'
         );
       }
     }
   },
 });
-
-function loadTiniConfig() {
-  return readJSON(resolve('tini.config.json')) as Promise<TiniConfig>;
-}
-
-async function readSWDotTS() {
-  const file = await readFile(resolve('app', 'sw.ts'));
-  return file.toString('utf8');
-}
-
-function transpile(code: string) {
-  return transpileModule(code, {
-    compilerOptions: {
-      noEmit: false,
-      sourceMap: false,
-      skipLibCheck: true,
-      moduleResolution: ModuleResolutionKind.NodeJs,
-      module: ModuleKind.ESNext,
-      target: ScriptTarget.ESNext,
-    },
-  });
-}
-
-function buildPrecaching(options: GetManifestOptions) {
-  return getManifest(options);
-}
-
-function saveSWDotJS(rawPath: string, content: string) {
-  return outputFile(rawPath, content);
-}

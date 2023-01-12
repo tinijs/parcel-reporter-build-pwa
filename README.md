@@ -1,4 +1,4 @@
-# Build PWA
+# TiniJS Build PWA
 
 A ParcelJS reporter for building PWA assets.
 
@@ -16,6 +16,14 @@ Use in the `.parcelrc`
 ```
 
 For more, please visit: <https://tinijs.dev>
+
+## Development
+
+- Create a home for TiniJS: `mkdir TiniJS && cd TiniJS`
+- Fork the repo: `git clone https://github.com/tinijs/parcel-reporter-build-pwa.git`
+- Install dependencies: `cd parcel-reporter-build-pwa && npm i`
+- Make changes & build locally: `npm run build && npm pack`
+- Push changes & create a PR 👌
 
 ## License
 

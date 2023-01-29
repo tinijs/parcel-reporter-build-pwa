@@ -1,6 +1,5 @@
 import {Reporter} from '@parcel/plugin';
 import {resolve} from 'path';
-import {execSync} from 'child_process';
 import {gray, cyan, red, bold, magenta, green} from 'chalk';
 import {readFile, readJSON, outputFile, stat} from 'fs-extra';
 import {
@@ -10,6 +9,7 @@ import {
   ModuleResolutionKind,
 } from 'typescript';
 import {getManifest} from 'workbox-build';
+import {build as esBuild} from 'esbuild';
 
 interface TiniConfig {
   out?: string;
@@ -65,10 +65,14 @@ precacheAndRoute(${JSON.stringify(manifestEntries)});
       await outputFile(swPath, code);
       // bundle
       try {
-        execSync(
-          `parcel build ${outDir}/sw.js --dist-dir ${outDir} --config "@parcel/config-default" --log-level error`,
-          {cwd: '.', stdio: 'inherit'}
-        );
+        await esBuild({
+          entryPoints: [`${outDir}/sw.js`],
+          allowOverwrite: true,
+          bundle: true,
+          sourcemap: true,
+          minify: true,
+          outdir: outDir,
+        });
         if (process.env.NODE_ENV !== 'development') {
           const endTime = new Date().getTime();
           const timeSecs = ((endTime - startTime) / 1000).toFixed(2);

@@ -45,6 +45,7 @@
     "@parcel/ts-utils": "^2.8.2",
     "@parcel/types": "^2.8.2",
     "chalk": "^4.1.2",
+    "esbuild": "^0.17.5",
     "fs-extra": "^11.1.0",
     "workbox-build": "^6.5.4"
   },

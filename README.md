@@ -1,5 +1,7 @@
 # TiniJS Build PWA
 
+:x: DEPRICATED, will move functions to the CLI.
+
 A ParcelJS reporter for building PWA assets.
 
 ## Install & usage
